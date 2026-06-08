@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const parse = require('url-parse');
@@ -7,7 +8,8 @@ const { visit } = require('./worker');
 const app = express();
 const port = Number(process.env.PORT || 1337);
 const sessionCookie = crypto.randomBytes(24).toString('hex');
-const protectedValue = `HSS-${crypto.randomBytes(18).toString('hex').toUpperCase()}`;
+const protectedValuePath = process.env.HSS_VALUE_PATH || '/run/hss/value';
+const fallbackProtectedValue = `HSS-${crypto.randomBytes(18).toString('hex').toUpperCase()}`;
 const collectionTag = crypto.randomBytes(16).toString('hex');
 const collected = [];
 
@@ -18,6 +20,14 @@ app.use(express.text({ type: '*/*', limit: '32kb' }));
 
 function page(body) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>HSS</title></head><body>${body}</body></html>`;
+}
+
+function protectedValue() {
+  try {
+    const value = fs.readFileSync(protectedValuePath, 'utf8').trim();
+    if (/^HSS-[A-F0-9]+$/.test(value)) return value;
+  } catch {}
+  return fallbackProtectedValue;
 }
 
 app.get('/', (req, res) => {
@@ -72,7 +82,7 @@ app.get('/review/value', (req, res) => {
     res.status(401).send('not available');
     return;
   }
-  res.type('text/plain').send(protectedValue);
+  res.type('text/plain').send(protectedValue());
 });
 
 app.post('/collect', (req, res) => {

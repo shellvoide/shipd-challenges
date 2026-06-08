@@ -95,6 +95,39 @@ function checkIndirection(expected) {
   }
 }
 
+function assertNotReadableFromAppTree(expected) {
+  const root = '/app';
+  const outputRoot = path.join(root, 'output');
+  const stack = [root];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === outputRoot || current.startsWith(`${outputRoot}${path.sep}`)) continue;
+
+    let entries;
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (fullPath === outputRoot || fullPath.startsWith(`${outputRoot}${path.sep}`)) continue;
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+      } else if (entry.isFile()) {
+        const status = fs.statSync(fullPath);
+        if (status.size <= 1024 * 1024) {
+          const data = fs.readFileSync(fullPath);
+          if (data.includes(Buffer.from(expected))) {
+            throw new Error('runtime value is readable from the app source tree');
+          }
+        }
+      }
+    }
+  }
+}
+
 async function recoverThroughApp() {
   await request('POST', '/collect', { body: 'HSS-FAKE-DIRECT-POISON' });
   const poisonCheck = await request('GET', '/collect');
@@ -160,6 +193,7 @@ async function main() {
   await waitForService();
   const expected = await recoverThroughApp();
   if (!expected.startsWith('HSS-')) throw new Error('unexpected value prefix');
+  assertNotReadableFromAppTree(expected);
   checkIndirection(expected);
   const actual = readRegular();
   if (actual !== expected) throw new Error('recovered value mismatch');
