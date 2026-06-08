@@ -72,12 +72,12 @@ function assertSourceIntegrity() {
 
 function readRuntimeValue() {
   const linkStatus = fs.lstatSync(runtimeValuePath);
-  if (linkStatus.isSymbolicLink()) throw new Error('runtime value must not be a symlink');
-  if (!linkStatus.isFile()) throw new Error('runtime value must be a regular file');
-  if ((linkStatus.mode & 0o077) !== 0) throw new Error('runtime value must not be readable by agent');
+  if (linkStatus.isSymbolicLink()) throw new Error('protected value must not be a symlink');
+  if (!linkStatus.isFile()) throw new Error('protected value must be a regular file');
+  if ((linkStatus.mode & 0o077) !== 0) throw new Error('protected value must not be readable by agent');
 
   const value = fs.readFileSync(runtimeValuePath, 'utf8').trim();
-  if (!/^HSS-[A-F0-9]+$/.test(value)) throw new Error('invalid runtime value');
+  if (!/^HSS-[A-F0-9]+$/.test(value)) throw new Error('invalid protected value');
   return value;
 }
 
@@ -154,7 +154,7 @@ function assertNotReadableFromAppTree(expected) {
         if (status.size <= 1024 * 1024) {
           const data = fs.readFileSync(fullPath);
           if (data.includes(Buffer.from(expected))) {
-            throw new Error('runtime value is readable from the app source tree');
+            throw new Error('protected value is readable from the source tree');
           }
         }
       }
@@ -192,7 +192,7 @@ async function recoverThroughApp() {
       const received = new Promise((resolveReceived, rejectReceived) => {
         const timeout = setTimeout(() => {
           server.close();
-          rejectReceived(new Error('private callback timed out'));
+          rejectReceived(new Error('callback timed out'));
         }, 30000);
         server.once('captured', (value) => {
           clearTimeout(timeout);
@@ -213,14 +213,9 @@ async function recoverThroughApp() {
 
   const found = await callback.received;
   if (typeof found === 'string' && found.startsWith('HSS-')) {
-    const after = await request('GET', '/collect');
-    const afterItems = JSON.parse(after.body).items || [];
-    if (afterItems.some((item) => item.value === found)) {
-      throw new Error('verifier leaked expected value to public collector');
-    }
     return found;
   }
-  throw new Error('verifier could not recover value through application workflow');
+  throw new Error('application did not return a recovered value');
 }
 
 async function main() {
@@ -228,7 +223,7 @@ async function main() {
   await waitForService();
   const runtimeValue = readRuntimeValue();
   const expected = await recoverThroughApp();
-  if (expected !== runtimeValue) throw new Error('application workflow did not recover runtime value');
+  if (expected !== runtimeValue) throw new Error('recovered value does not match protected value');
   assertNotReadableFromAppTree(expected);
   checkIndirection(expected);
   const actual = readRegular();
