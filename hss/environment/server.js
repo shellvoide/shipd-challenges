@@ -77,11 +77,12 @@ app.get('/review/value', (req, res) => {
 
 app.post('/collect', (req, res) => {
   const value = typeof req.body === 'string' ? req.body.trim() : '';
-  const separator = value.indexOf(':');
-  const tag = separator === -1 ? '' : value.slice(0, separator);
-  const recovered = separator === -1 ? '' : value.slice(separator + 1);
-  if (tag === collectionTag && recovered.length > 0 && recovered.length < 128) {
-    collected.unshift({ value: recovered, tag, time: Date.now() });
+  const parts = value.split(':');
+  const tag = parts.shift() || '';
+  const nonce = parts.shift() || '';
+  const recovered = parts.join(':');
+  if (tag === collectionTag && /^[a-f0-9]{24}$/.test(nonce) && recovered.length > 0 && recovered.length < 128) {
+    collected.unshift({ value: recovered, nonce, time: Date.now() });
     collected.splice(8);
   }
   res.send('ok');
