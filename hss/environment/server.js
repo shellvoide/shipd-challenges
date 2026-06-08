@@ -7,7 +7,7 @@ const { visit } = require('./worker');
 const app = express();
 const port = Number(process.env.PORT || 1337);
 const sessionCookie = crypto.randomBytes(24).toString('hex');
-const protectedValue = `NBL-${crypto.randomBytes(18).toString('hex').toUpperCase()}`;
+const protectedValue = `HSS-${crypto.randomBytes(18).toString('hex').toUpperCase()}`;
 const collected = [];
 
 app.disable('x-powered-by');
@@ -58,7 +58,7 @@ app.post('/report', (req, res) => {
   res.send('queued');
 });
 
-app.get('/flag', (req, res) => {
+app.get('/review/value', (req, res) => {
   if (req.cookies.session !== sessionCookie) {
     res.status(401).send('not available');
     return;

