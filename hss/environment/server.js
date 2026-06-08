@@ -8,6 +8,7 @@ const app = express();
 const port = Number(process.env.PORT || 1337);
 const sessionCookie = crypto.randomBytes(24).toString('hex');
 const protectedValue = `HSS-${crypto.randomBytes(18).toString('hex').toUpperCase()}`;
+const collectionTag = crypto.randomBytes(16).toString('hex');
 const collected = [];
 
 app.disable('x-powered-by');
@@ -48,6 +49,14 @@ app.get('/report', (req, res) => {
   res.type('html').send(page('<form method="POST"><input name="parameters"><button>Submit</button></form>'));
 });
 
+app.get('/review/meta', (req, res) => {
+  if (req.cookies.session !== sessionCookie) {
+    res.status(401).send('not available');
+    return;
+  }
+  res.json({ channel: collectionTag });
+});
+
 app.post('/report', (req, res) => {
   const parameters = req.body && req.body.parameters;
   if (typeof parameters !== 'string') {
@@ -68,8 +77,11 @@ app.get('/review/value', (req, res) => {
 
 app.post('/collect', (req, res) => {
   const value = typeof req.body === 'string' ? req.body.trim() : '';
-  if (value.length > 0 && value.length < 128) {
-    collected.unshift({ value, time: Date.now() });
+  const separator = value.indexOf(':');
+  const tag = separator === -1 ? '' : value.slice(0, separator);
+  const recovered = separator === -1 ? '' : value.slice(separator + 1);
+  if (tag === collectionTag && recovered.length > 0 && recovered.length < 128) {
+    collected.unshift({ value: recovered, tag, time: Date.now() });
     collected.splice(8);
   }
   res.send('ok');

